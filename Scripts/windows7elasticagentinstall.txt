@@ -1,0 +1,71 @@
+﻿﻿#place the elastic zip on your desktop
+#place the CA.crt on the desktop
+
+
+$agent = "elastic-agent-8.8.2-windows-x86_64.zip" #If zip name is different specify here
+$DestPath = "C:\Users\Administrator" #If you want a different path specify here
+
+$username = Read-Host 'Type in domain username (ex. magic\Administrator)'
+$password= Read-Host 'Type in the password for admin domain'
+
+$computers = Get-Content C:\Users\flarevm\desktop\hosts.txt #This needs to be the path of the hosts file that contains all of the IPs of the hosts
+$passwd = convertto-securestring -AsPlainText -Force -String $password #If this is different, then change it
+$cred = New-Object -typename System.Management.Automation.PSCredential -argumentlist $username,$passwd #If admin account is different than change it, should only need to use the local admin account
+
+#Menud
+Write-Host "Please select from the following options:"
+Write-Host "1. Uninstall Agents and reboot endpoints"
+Write-Host "2. Install Agents"
+$Selection = Read-Host 'Please make a selection'
+
+Write-Host "$Selection"
+
+If ($Selection -eq '1') {
+    foreach ($computer in $computers) {
+
+    Write-Host "Creating Session for $computer" 
+    $Session = New-PSSession -ComputerName $computer -Credential $cred
+
+    
+    Write-Host "Set Execution Policy to Unrestricted"
+    Invoke-Command -Session $Session -scriptblock {Set-ExecutionPolicy Unrestricted}
+    Write-Host "Uninstall Elastic-Agent"
+    Invoke-Command -Session $Session -scriptblock {Start-Process -FilePath "C:\Program Files\Elastic\Agent\elastic-agent" -ArgumentList "uninstall","--force"}
+    Write-Host "Rebooting Endpoint"
+    Invoke-Command -Session $Session -ScriptBlock {Restart-Computer -Force}
+    }
+}
+
+ElseIf ($Selection -eq '2') {
+    $FirewallIP = Read-Host 'Type in Firewall WAN IP and PORT'
+    $tokenID = Read-Host 'Type in token ID'
+
+    foreach ($computer in $computers) {
+
+
+    Write-Host "Creating Session for $computer" 
+    $Session = New-PSSession -ComputerName $computer -Credential $cred
+    Write-Host "Set Execution Policy"
+    Invoke-Command -Session $Session -scriptblock {Set-ExecutionPolicy Unrestricted}
+    Write-Host "Copying Files"
+    Copy-Item C:\Users\flarevm\Desktop\$agent -Destination $DestPath -ToSession $Session
+    Copy-Item C:\Users\flarevm\Desktop\ca.crt -Destination $DestPath -ToSession $Session
+    Write-Host "Expanding Archive"
+    Invoke-Command -Session $Session -scriptblock {mkdir C:\elastic-agent-tmp\}
+    Invoke-Command -Session $Session -scriptblock {Add-Type -AssemblyName System.IO.Compression.FileSystem
+     function Unzip
+    {
+    param([string]$zipfile, [string]$outpath)
+
+    [System.IO.Compression.ZipFile]::ExtractToDirectory($zipfile, $outpath)
+    }
+
+    Unzip "C:\Users\Administrator\elastic-agent-8.8.2-windows-x86_64.zip" "C:\elastic-agent-tmp\"}
+    Write-Host "Changing ETC Host file"
+    Invoke-command -Session $Session -ScriptBlock { Add-content C:\Windows\System32\Drivers\Etc\Hosts -Value "204.2.11.254 somanager" -Force }
+    Write-Host "Installing Elastic Agent"
+    Invoke-Command -Session $Session -scriptblock {C:\elastic-agent-tmp\elastic-agent-8.8.2-windows-x86_64\elastic-agent.exe install --url=https://$Using:FirewallIP --certificate-authorities=$Using:DestPath\ca.crt --enrollment-token=$Using:tokenID --force}
+    $r = Get-PSSession -Name *
+    $r | Remove-PSSession
+    }
+}
