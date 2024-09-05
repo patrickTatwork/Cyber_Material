@@ -1,0 +1,8 @@
+LINUX AGENT INSTALL
+
+
+scp elastic-agent-8.8.2-linux-x86_64.tar.gz webuser@136.226.3.4:/home/webuserelastic-agent-8.8.2-linux-x86_64.tar.gz
+scp CA.crt webuser@136.226.3.4:/home/webuser/elastic-agent-8.8.2-linux-x86_64/CA.crt
+tar xzf ./elastic-agent-8.8.2-linux-x86_64.tar.gz
+sudo nano /etc/hosts (Add the firewall IP 204.2.11.254 somanager)
+sudo ./elastic-agent install --url=https://204.2.11.254:8220 --insecure --enrollment-token=MXZnVzVvMEI2anJpY1p0TURwS0E6dHN6S3VfZXZRdy1NRTA0RnlXMHVPZw==
